@@ -1,0 +1,631 @@
+// XERON — Prisma schema (SQLite hozir, PostgreSQL ga ko'chirish oson).
+// PostgreSQL ga o'tishda: provider = "postgresql" va String maydonlarni enum/Json ga almashtirish mumkin.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────── Foydalanuvchi va profil ─────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  username     String    @unique
+  passwordHash String
+  role         String    @default("PLAYER") // PLAYER | MODERATOR | ADMIN
+  status       String    @default("ACTIVE") // ACTIVE | SUSPENDED | DELETED
+  birthYear    Int?
+  ageGroup     String    @default("TEEN") // CHILD (<13) | TEEN (13-17) | ADULT (18+)
+  country      String? // ISO-2 kod, aniq joylashuv saqlanmaydi
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastLoginAt  DateTime?
+
+  profile       Profile?
+  character     Character?
+  inventory     Inventory?
+  world         VirtualWorld?
+  items         UserItem[]
+  currencyTx    CurrencyTransaction[]
+  xpTx          XPTransaction[]
+  missions      MissionParticipation[]
+  achievements  UserAchievement[]
+  competitions  CompetitionParticipant[]
+  teamMembers   TeamMember[]
+  teamsOwned    Team[]                   @relation("TeamOwner")
+  teamInvitesIn TeamInvite[]             @relation("InviteTo")
+  teamInvitesBy TeamInvite[]             @relation("InviteBy")
+  friendsSent   Friend[]                 @relation("FriendRequester")
+  friendsRecv   Friend[]                 @relation("FriendAddressee")
+  following     Follow[]                 @relation("Follower")
+  followers     Follow[]                 @relation("Following")
+  posts         Post[]
+  comments      Comment[]
+  likes         Like[]
+  reportsMade   Report[]                 @relation("Reporter")
+  notifications Notification[]
+  adminActions  AdminAction[]
+  loadouts      Loadout[]
+
+  @@index([country])
+  @@index([status])
+}
+
+model Profile {
+  id          String  @id @default(cuid())
+  userId      String  @unique
+  displayName String
+  bio         String  @default("")
+  title       String? // ochilgan unvon
+  isPublic    Boolean @default(true)
+  showCountry Boolean @default(true)
+  showFriends Boolean @default(true)
+  allowDMs    Boolean @default(false) // yoshlar uchun sukut bo'yicha o'chiq
+  theme       String  @default("volt")
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ───────────── Qahramon ─────────────
+
+model Character {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  name       String
+  level      Int      @default(1)
+  xp         Int      @default(0) // jami XP
+  weeklyXp   Int      @default(0)
+  monthlyXp  Int      @default(0)
+  skillPoints Int     @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appearance CharacterAppearance?
+  stats      CharacterStats?
+  equipped   EquippedItem[]
+
+  @@index([xp])
+  @@index([weeklyXp])
+  @@index([monthlyXp])
+}
+
+model CharacterAppearance {
+  id          String @id @default(cuid())
+  characterId String @unique
+  body        String @default("male") // male | female | neutral
+  skinTone    String @default("#e0ac69")
+  hairStyle   String @default("short")
+  hairColor   String @default("#2b2118")
+  face        String @default("calm")
+  eyeColor    String @default("#2f8cff")
+  pose        String @default("idle") // idle | hero | wave
+  aura        String @default("none") // maxsus effekt
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+model CharacterStats {
+  id           String @id @default(cuid())
+  characterId  String @unique
+  strength     Int    @default(5)
+  intelligence Int    @default(5)
+  speed        Int    @default(5)
+  creativity   Int    @default(5)
+  endurance    Int    @default(5)
+  luck         Int    @default(5)
+  character    Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+// ───────────── Buyumlar va inventar ─────────────
+
+model Item {
+  id                String  @id @default(cuid())
+  slug              String  @unique
+  name              String
+  description       String
+  category          String // CLOTHES | SHOES | ARMOR | MASK | GLOVES | ACCESSORY | BACK | EFFECT | SKIN | MATERIAL
+  slot              String // TOP | JACKET | BOTTOM | SHOES | GLOVES | MASK | GLASSES | HEAD | BACK | EFFECT | SKIN | NONE
+  rarity            String // COMMON | UNCOMMON | RARE | EPIC | LEGENDARY | MYTHIC
+  visualKey         String // SVG qatlam kaliti
+  colorPrimary      String  @default("#2f8cff")
+  colorSecondary    String  @default("#8b5cf6")
+  gender            String  @default("ANY") // ANY | MALE | FEMALE
+  priceCoins        Int     @default(0)
+  priceGems         Int     @default(0)
+  unlockLevel       Int     @default(1)
+  unlockRequirement String?
+  bonusStrength     Int     @default(0)
+  bonusIntelligence Int     @default(0)
+  bonusSpeed        Int     @default(0)
+  bonusCreativity   Int     @default(0)
+  bonusEndurance    Int     @default(0)
+  bonusLuck         Int     @default(0)
+  isStarter         Boolean @default(false)
+  isFeatured        Boolean @default(false)
+  isActive          Boolean @default(true)
+  season            String? // masalan "WINTER-2026"
+  achievementId     String? // yutuq orqali ochiladigan buyum
+  createdAt         DateTime @default(now())
+
+  owners       UserItem[]
+  achievement  Achievement? @relation(fields: [achievementId], references: [id])
+
+  @@index([category])
+  @@index([rarity])
+  @@index([isFeatured])
+  @@index([season])
+}
+
+model Inventory {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  coins     Int      @default(0)
+  gems      Int      @default(0)
+  capacity  Int      @default(500)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserItem {
+  id         String   @id @default(cuid())
+  userId     String
+  itemId     String
+  source     String   @default("STORE") // STORE | STARTER | MISSION | ACHIEVEMENT | EVENT | ADMIN
+  acquiredAt DateTime @default(now())
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item     Item           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  equipped EquippedItem[]
+
+  @@unique([userId, itemId]) // takroriy xaridga yo'l qo'ymaydi
+  @@index([userId])
+}
+
+model EquippedItem {
+  id          String   @id @default(cuid())
+  characterId String
+  slot        String
+  userItemId  String
+  equippedAt  DateTime @default(now())
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  userItem  UserItem  @relation(fields: [userItemId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, slot]) // har bir uyada bitta buyum
+  @@index([userItemId])
+}
+
+model CurrencyTransaction {
+  id           String   @id @default(cuid())
+  userId       String
+  currency     String // COINS | GEMS
+  amount       Int // + kirim, - chiqim
+  balanceAfter Int
+  reason       String // PURCHASE | MISSION | COMPETITION | ACHIEVEMENT | ADMIN | DAILY
+  refType      String?
+  refId        String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model XPTransaction {
+  id        String   @id @default(cuid())
+  userId    String
+  amount    Int
+  reason    String // MISSION | COMPETITION | ACHIEVEMENT | ADMIN
+  refType   String?
+  refId     String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reason, refType, refId]) // bir manba uchun XP faqat bir marta
+  @@index([userId, createdAt])
+}
+
+// ───────────── Missiyalar ─────────────
+
+model Mission {
+  id                 String    @id @default(cuid())
+  slug               String    @unique
+  title              String
+  description        String
+  category           String // KNOWLEDGE | INTELLIGENCE | CREATIVITY | TECHNOLOGY | WELLNESS | NATURE | TEAMWORK | SOCIAL
+  type               String // DAILY | WEEKLY | MONTHLY | SPECIAL | TEAM | GLOBAL
+  difficulty         String    @default("EASY") // EASY | MEDIUM | HARD | EPIC
+  xpReward           Int
+  coinReward         Int       @default(0)
+  gemReward          Int       @default(0)
+  statTarget         String? // strength | intelligence | ...
+  requirements       String    @default("")
+  verificationMethod String    @default("QUIZ") // QUIZ | TEXT | SELF_REPORT
+  question           String? // QUIZ uchun savol
+  optionsJson        String? // QUIZ variantlari (JSON massiv)
+  answerHash         String? // to'g'ri javob (faqat serverda, hash ko'rinishida)
+  minLevel           Int       @default(1)
+  minAge             Int?
+  startsAt           DateTime?
+  deadline           DateTime?
+  isActive           Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+
+  participations MissionParticipation[]
+
+  @@index([type])
+  @@index([category])
+  @@index([isActive, deadline])
+}
+
+model MissionParticipation {
+  id          String    @id @default(cuid())
+  userId      String
+  missionId   String
+  status      String    @default("ACCEPTED") // ACCEPTED | SUBMITTED | COMPLETED | REJECTED | EXPIRED
+  periodKey   String    @default("ONCE") // masalan 2026-11-17 (kunlik) — qayta bajarish uchun
+  acceptedAt  DateTime  @default(now())
+  completedAt DateTime?
+  rewardGiven Boolean   @default(false)
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mission     Mission             @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  submissions MissionSubmission[]
+
+  @@unique([userId, missionId, periodKey])
+  @@index([userId, status])
+}
+
+model MissionSubmission {
+  id              String   @id @default(cuid())
+  participationId String
+  content         String   @default("")
+  evidenceUrl     String?
+  status          String   @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  score           Int      @default(0)
+  feedback        String?
+  createdAt       DateTime @default(now())
+
+  participation MissionParticipation @relation(fields: [participationId], references: [id], onDelete: Cascade)
+
+  @@index([participationId])
+}
+
+// ───────────── Yutuqlar ─────────────
+
+model Achievement {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  name        String
+  description String
+  icon        String  @default("trophy")
+  rarity      String  @default("COMMON")
+  conditionType  String // LEVEL | MISSIONS_COMPLETED | COMPETITIONS_WON | ITEMS_OWNED | FRIENDS | CITY_LEVEL | MANUAL
+  conditionValue Int     @default(1)
+  xpReward    Int     @default(0)
+  coinReward  Int     @default(0)
+  titleReward String?
+  isActive    Boolean @default(true)
+
+  users UserAchievement[]
+  items Item[]
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  achievementId String
+  unlockedAt    DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+}
+
+// ───────────── Arena ─────────────
+
+model Competition {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  description String
+  type        String // KNOWLEDGE | LOGIC | MATH | CREATIVE | TEAM | CHAMPIONSHIP
+  status      String   @default("UPCOMING") // UPCOMING | LIVE | FINISHED
+  startsAt    DateTime
+  endsAt      DateTime
+  durationSec Int      @default(300) // ishtirokchi uchun umumiy vaqt
+  xpReward    Int      @default(100)
+  coinReward  Int      @default(50)
+  maxParticipants Int  @default(1000)
+  minLevel    Int      @default(1)
+  season      String?
+  finalizedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  questions    CompetitionQuestion[]
+  participants CompetitionParticipant[]
+
+  @@index([status, startsAt])
+}
+
+model CompetitionQuestion {
+  id            String @id @default(cuid())
+  competitionId String
+  orderIndex    Int
+  prompt        String
+  optionsJson   String // JSON massiv
+  correctIndex  Int // FAQAT serverda; mijozga hech qachon yuborilmaydi
+  points        Int    @default(10)
+
+  competition Competition         @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  answers     CompetitionAnswer[]
+
+  @@unique([competitionId, orderIndex])
+}
+
+model CompetitionParticipant {
+  id            String    @id @default(cuid())
+  competitionId String
+  userId        String
+  status        String    @default("REGISTERED") // REGISTERED | PLAYING | FINISHED
+  score         Int       @default(0)
+  rank          Int?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  rewardGiven   Boolean   @default(false)
+
+  competition Competition         @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers     CompetitionAnswer[]
+
+  @@unique([competitionId, userId])
+  @@index([competitionId, score])
+}
+
+model CompetitionAnswer {
+  id             String   @id @default(cuid())
+  participantId  String
+  questionId     String
+  selectedIndex  Int
+  correct        Boolean
+  pointsAwarded  Int      @default(0)
+  answeredAt     DateTime @default(now())
+
+  participant CompetitionParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  question    CompetitionQuestion    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, questionId]) // har savolga bitta javob
+}
+
+// ───────────── Jamoalar va do'stlar ─────────────
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  tag         String   @unique
+  description String   @default("")
+  isPublic    Boolean  @default(true)
+  ownerId     String
+  teamXp      Int      @default(0)
+  maxMembers  Int      @default(20)
+  createdAt   DateTime @default(now())
+
+  owner   User         @relation("TeamOwner", fields: [ownerId], references: [id])
+  members TeamMember[]
+  invites TeamInvite[]
+
+  @@index([teamXp])
+}
+
+model TeamMember {
+  id       String   @id @default(cuid())
+  teamId   String
+  userId   String
+  role     String   @default("MEMBER") // OWNER | OFFICER | MEMBER
+  joinedAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@unique([userId]) // bir vaqtda faqat bitta jamoa
+}
+
+model TeamInvite {
+  id        String   @id @default(cuid())
+  teamId    String
+  toUserId  String
+  byUserId  String
+  status    String   @default("PENDING") // PENDING | ACCEPTED | DECLINED
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  to   User @relation("InviteTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  by   User @relation("InviteBy", fields: [byUserId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, toUserId])
+}
+
+model Friend {
+  id          String   @id @default(cuid())
+  requesterId String
+  addresseeId String
+  status      String   @default("PENDING") // PENDING | ACCEPTED | BLOCKED
+  createdAt   DateTime @default(now())
+
+  requester User @relation("FriendRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId, status])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+}
+
+// ───────────── Hamjamiyat ─────────────
+
+model Post {
+  id        String   @id @default(cuid())
+  authorId  String
+  content   String
+  kind      String   @default("TEXT") // TEXT | ACHIEVEMENT
+  refId     String?
+  status    String   @default("VISIBLE") // VISIBLE | HIDDEN | REMOVED
+  createdAt DateTime @default(now())
+
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments Comment[]
+  likes    Like[]
+
+  @@index([createdAt])
+  @@index([authorId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  content   String
+  status    String   @default("VISIBLE")
+  createdAt DateTime @default(now())
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+}
+
+model Report {
+  id         String   @id @default(cuid())
+  reporterId String
+  targetType String // POST | COMMENT | USER
+  targetId   String
+  reason     String
+  details    String   @default("")
+  status     String   @default("OPEN") // OPEN | RESOLVED | DISMISSED
+  createdAt  DateTime @default(now())
+
+  reporter User @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+// ───────────── Virtual dunyo ─────────────
+
+model VirtualWorld {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  cityName    String
+  cityLevel   Int      @default(1)
+  devPoints   Int      @default(0)
+  wood        Int      @default(0)
+  stone       Int      @default(0)
+  energy      Int      @default(0)
+  gridSize    Int      @default(8)
+  createdAt   DateTime @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  buildings Building[]
+}
+
+model Building {
+  id       String @id @default(cuid())
+  worldId  String
+  type     String // HOUSE | LAB | ACADEMY | ARENA_HALL | PARK | TOWER | MARKET | MONUMENT
+  level    Int    @default(1)
+  x        Int
+  y        Int
+  builtAt  DateTime @default(now())
+
+  world VirtualWorld @relation(fields: [worldId], references: [id], onDelete: Cascade)
+
+  @@unique([worldId, x, y])
+}
+
+// Umumjahon loyihalar (jamoaviy taraqqiyot)
+model GlobalProject {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  description String
+  goalPoints  Int
+  currentPoints Int    @default(0)
+  isActive    Boolean  @default(true)
+}
+
+// ───────────── Bildirishnomalar va admin ─────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String // MISSION | XP | LEVEL | ACHIEVEMENT | FRIEND | TEAM | COMPETITION | GLOBAL | SYSTEM
+  title     String
+  body      String   @default("")
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+}
+
+model AdminAction {
+  id         String   @id @default(cuid())
+  adminId    String
+  action     String
+  targetType String
+  targetId   String?
+  details    String   @default("")
+  createdAt  DateTime @default(now())
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@index([adminId, createdAt])
+}
+
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// Saqlangan jihoz to'plamlari (kiyim kombinatsiyalari)
+model Loadout {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  dataJson  String // { slot: itemId }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+}

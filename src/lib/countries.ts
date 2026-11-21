@@ -1,0 +1,20 @@
+export const COUNTRIES: { code: string; name: string }[] = [
+  { code: "UZ", name: "O'zbekiston" }, { code: "KZ", name: "Qozog'iston" }, { code: "KG", name: "Qirg'iziston" },
+  { code: "TJ", name: "Tojikiston" }, { code: "TM", name: "Turkmaniston" }, { code: "AF", name: "Afg'oniston" },
+  { code: "TR", name: "Turkiya" }, { code: "AZ", name: "Ozarbayjon" }, { code: "RU", name: "Rossiya" },
+  { code: "UA", name: "Ukraina" }, { code: "BY", name: "Belarus" }, { code: "PL", name: "Polsha" },
+  { code: "DE", name: "Germaniya" }, { code: "FR", name: "Fransiya" }, { code: "GB", name: "Buyuk Britaniya" },
+  { code: "ES", name: "Ispaniya" }, { code: "IT", name: "Italiya" }, { code: "NL", name: "Niderlandiya" },
+  { code: "SE", name: "Shvetsiya" }, { code: "NO", name: "Norvegiya" }, { code: "US", name: "AQSH" },
+  { code: "CA", name: "Kanada" }, { code: "MX", name: "Meksika" }, { code: "BR", name: "Braziliya" },
+  { code: "AR", name: "Argentina" }, { code: "CL", name: "Chili" }, { code: "CO", name: "Kolumbiya" },
+  { code: "EG", name: "Misr" }, { code: "SA", name: "Saudiya Arabistoni" }, { code: "AE", name: "BAA" },
+  { code: "IR", name: "Eron" }, { code: "IL", name: "Isroil" }, { code: "PK", name: "Pokiston" },
+  { code: "IN", name: "Hindiston" }, { code: "BD", name: "Bangladesh" }, { code: "CN", name: "Xitoy" },
+  { code: "JP", name: "Yaponiya" }, { code: "KR", name: "Janubiy Koreya" }, { code: "VN", name: "Vyetnam" },
+  { code: "TH", name: "Tailand" }, { code: "ID", name: "Indoneziya" }, { code: "MY", name: "Malayziya" },
+  { code: "PH", name: "Filippin" }, { code: "AU", name: "Avstraliya" }, { code: "NZ", name: "Yangi Zelandiya" },
+  { code: "ZA", name: "Janubiy Afrika" }, { code: "NG", name: "Nigeriya" }, { code: "KE", name: "Keniya" },
+  { code: "MA", name: "Marokash" },
+];
+export const countryName = (code?: string | null) => COUNTRIES.find((c) => c.code === code)?.name ?? code ?? "-";
